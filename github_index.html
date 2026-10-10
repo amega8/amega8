@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="个人博客，支持发文、评论、搜索、标签、点赞与深色模式。纯静态单文件，无需服务器">
+<title>个人博客</title>
+<style>
+    :root {
+        --bg: #f5f7fa;
+        --card: #fff;
+        --text: #333;
+        --muted: #888;
+        --header: #222831;
+        --accent: #00adb5;
+        --accent-hover: #009199;
+        --border: #e6e9ee;
+        --shadow: 0 2px 12px rgba(0,0,0,.07);
+        --notice-bg: #e8f4fd;
+        --notice-text: #224b70;
+        --radius: 12px;
+        /* 沉浸式导航：滚动后才出现的毛玻璃底色 / 投影 / 按钮悬浮色 */
+        --nav-bg: rgba(245,247,250,.78);
+        --nav-shadow: 0 4px 20px rgba(0,0,0,.06);
+        --nav-hover: rgba(0,0,0,.06);
+    }
+    html[data-theme="dark"] {
+        --bg: #151a1f;
+        --card: #1e242b;
+        --text: #e6e9ee;
+        --muted: #93a0ad;
+        --header: #0f1318;
+        --border: #2b333c;
+        --shadow: 0 2px 14px rgba(0,0,0,.45);
+        --notice-bg: #1b2b38;
+        --notice-text: #9fd0f0;
+        --nav-bg: rgba(21,26,31,.78);
+        --nav-shadow: 0 4px 22px rgba(0,0,0,.40);
+        --nav-hover: rgba(255,255,255,.10);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* 防止 .login-wrap 的 display:flex 覆盖 hidden 属性 */
+    [hidden] { display: none !important; }
+
+    body {
+        font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        line-height: 1.7;
+        transition: background-color .3s, color .3s;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ============ 头部（沉浸式导航） ============ */
+    header {
+        /* 默认完全透明，与页面背景融为一体；滚动后由 .scrolled 加毛玻璃 */
+        background: transparent;
+        color: var(--text);
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        box-shadow: none;
+        transition: background-color .25s ease, box-shadow .25s ease;
+    }
+    header.scrolled {
+        background: var(--nav-bg);
+        -webkit-backdrop-filter: saturate(180%) blur(14px);
+        backdrop-filter: saturate(180%) blur(14px);
+        box-shadow: var(--nav-shadow);
+    }
+    .header-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 0 20px;
+        display: flex;
+        /* 站名已去掉，导航整体靠右排放（落在容器右半区） */
+        justify-content: flex-end;
+        align-items: center;
+        height: 60px;
+        gap: 28px;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    nav ul { display: flex; list-style: none; gap: 26px; }
+    nav a {
+        color: var(--text);
+        text-decoration: none;
+        font-size: 16px;
+        opacity: .62;
+        padding-bottom: 3px;
+        border-bottom: 2px solid transparent;
+        transition: color .2s, opacity .2s, border-color .2s;
+    }
+    nav a:hover { opacity: 1; color: var(--accent); }
+    nav a.active { opacity: 1; color: var(--accent); border-bottom-color: var(--accent); }
+
+    .icon-btn {
+        background: transparent;
+        border: none;
+        color: var(--text);
+        font-size: 20px;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 8px;
+        line-height: 1;
+        opacity: .75;
+        transition: opacity .2s, background-color .2s;
+    }
+    .icon-btn:hover { opacity: 1; background: var(--nav-hover); }
+
+    .hamburger { display: none; font-size: 24px; }
+
+    /* ============ 主体 ============ */
+    main {
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 30px 20px 60px;
+        flex: 1;
+        animation: fade .25s ease;
+    }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    section { display: none; }
+    section.active { display: block; }
+    section h1 { font-size: 26px; margin-bottom: 18px; }
+
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+
+    .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow);
+        transition: background-color .3s, box-shadow .2s;
+    }
+    .card h3 { margin-bottom: 8px; color: var(--text); font-size: 19px; }
+    .card .time { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .card .content { white-space: pre-wrap; word-break: break-word; }
+
+    .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .link-btn {
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        white-space: nowrap;
+    }
+    .link-btn:hover { color: #e74c3c; background: rgba(231,76,60,.1); }
+
+    /* 搜索 */
+    .search-bar { display: flex; gap: 10px; margin-bottom: 18px; }
+    .search-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+    .search-wrap .search-ico {
+        position: absolute;
+        left: 13px;
+        width: 17px; height: 17px;
+        color: var(--muted);
+        pointer-events: none;
+        flex: none;
+    }
+    .search-bar input {
+        width: 100%;
+        height: 42px;
+        padding: 0 14px 0 38px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 15px;
+        line-height: 42px;
+        background: var(--card);
+        color: var(--text);
+    }
+    /* 去掉 type=search 自带的清除按钮，让左右内边距对称 */
+    .search-bar input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+    .search-bar input:focus { border-color: var(--accent); outline: none; }
+    /* 搜索栏右侧的「发布文章」按钮 */
+    .search-bar .new-post {
+        flex: none;
+        height: 42px;
+        padding: 0 18px;
+        font-size: 15px;
+        white-space: nowrap;
+    }
+
+    /* 发布文章表单 */
+    #publishCard .section-title {
+        font-size: 15px; font-weight: 600;
+        margin-bottom: 14px;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .publish-foot {
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .publish-foot .tip { margin: 0; }
+
+    /* 表单 */
+    .form-item { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 15px; }
+    input, textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 16px;
+        background: var(--card);
+        color: var(--text);
+        font-family: inherit;
+        transition: border-color .2s;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); outline: none; }
+    textarea { min-height: 100px; resize: vertical; }
+
+    button {
+        padding: 10px 20px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-family: inherit;
+        transition: background .2s, opacity .2s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    button.ghost {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+    }
+    button.ghost:hover { background: var(--accent); color: #fff; }
+
+    /* 评论 */
+    .comment-item {
+        border-left: 3px solid var(--accent);
+        padding: 10px 14px;
+        margin: 10px 0;
+        background: rgba(0,173,181,.07);
+        border-radius: 0 8px 8px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .comment-item .meta { font-size: 12px; color: var(--muted); margin-left: 6px; }
+    .comment-item .msg { white-space: pre-wrap; word-break: break-word; }
+
+    .comment-toggle-btn {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--accent);
+        margin-top: 12px;
+        user-select: none;
+        font-size: 15px;
+    }
+    .comment-input-area {
+        display: none;
+        margin-top: 12px;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+    }
+    .comment-input-area.open { display: block; }
+
+    .tip { color: #e74c3c; margin: 8px 0; font-size: 14px; min-height: 20px; }
+    .tip.success { color: #27ae60; }
+    .notice {
+        background-color: var(--notice-bg);
+        padding: 12px 14px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        color: var(--notice-text);
+        font-size: 14px;
+    }
+    .notice.success { background: rgba(39,174,96,.12); color: #27ae60; }
+
+    .empty {
+        text-align: center;
+        padding: 50px 20px;
+        color: var(--muted);
+    }
+    .empty .emoji { font-size: 44px; display: block; margin-bottom: 10px; }
+
+    /* 提示条 */
+    #toast {
+        position: fixed;
+        left: 50%;
+        bottom: 32px;
+        transform: translate(-50%, 20px);
+        background: var(--header);
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-size: 14px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.25);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s, transform .25s;
+        z-index: 200;
+        max-width: 86vw;
+        text-align: center;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ============ 首页工具条 ============ */
+    .toolbar {
+        display: flex; align-items: center; gap: 12px;
+        flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .sort-group {
+        display: flex; gap: 4px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px; padding: 3px;
+    }
+    .sort-group button {
+        background: transparent; color: var(--muted); border: none;
+        padding: 5px 13px; font-size: 14px; border-radius: 8px;
+    }
+    .sort-group button:hover { background: transparent; color: var(--accent); }
+    .sort-group button.active { background: var(--accent); color: #fff; font-weight: 600; }
+    .tag-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .tag-chip {
+        background: var(--card); border: 1px solid var(--border); color: var(--muted);
+        padding: 4px 13px; border-radius: 999px; font-size: 13px; cursor: pointer;
+        transition: color .2s, border-color .2s, background .2s;
+    }
+    .tag-chip:hover { color: var(--accent); border-color: var(--accent); background: transparent; }
+    .tag-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tag-chip .n { opacity: .75; margin-left: 4px; font-size: 12px; }
+
+    /* 文章元信息 */
+    .art-meta {
+        display: flex; flex-wrap: wrap; gap: 14px;
+        font-size: 13px; color: var(--muted); margin-bottom: 12px;
+    }
+    .art-meta .author {
+        display: inline-flex; align-items: center; gap: 6px;
+        color: var(--accent); font-weight: 600;
+    }
+    /* 文章卡片上的作者头像（小圆头像） */
+    .mini-avatar {
+        width: 22px; height: 22px; flex: none;
+        border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 700; color: #fff; line-height: 1;
+        overflow: hidden; background: var(--accent);
+        box-shadow: 0 0 0 1px var(--border);
+        user-select: none;
+    }
+    .mini-avatar.lg { width: 28px; height: 28px; font-size: 13px; }
+    .art-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 0; }
+    .art-tags .t {
+        font-size: 12px; background: rgba(0,173,181,.12); color: var(--accent);
+        padding: 2px 10px; border-radius: 999px; cursor: pointer;
+    }
+    .art-tags .t:hover { background: var(--accent); color: #fff; }
+    .art-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .act-btn {
+        background: transparent; border: 1px solid var(--border); color: var(--muted);
+        padding: 0 14px; font-size: 14px; border-radius: 8px;
+        /* 点赞 / 评论 / 删除 外框统一：固定高 + 最小宽，内容长短不再影响框的大小 */
+        min-width: 92px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .act-btn:hover { background: transparent; color: var(--accent); border-color: var(--accent); }
+    .act-btn .ico { font-size: 15px; line-height: 1; flex: none; }
+    .act-btn.liked { color: #e74c3c; border-color: #e74c3c; background: rgba(231,76,60,.08); }
+    .act-btn.liked:hover { color: #e74c3c; border-color: #e74c3c; }
+
+    /* 长文折叠 */
+    .content.clamp { max-height: 165px; overflow: hidden; position: relative; }
+    .content.clamp::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46px;
+        background: linear-gradient(transparent, var(--card));
+    }
+    .read-more {
+        background: none; border: none; color: var(--accent);
+        font-size: 14px; cursor: pointer; padding: 6px 0;
+    }
+    .read-more:hover { background: transparent; text-decoration: underline; }
+
+    mark { background: rgba(255,214,0,.45); color: inherit; padding: 0 2px; border-radius: 3px; }
+
+    /* 分页 */
+    .pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 4px; }
+    .pager button {
+        background: var(--card); border: 1px solid var(--border);
+        color: var(--text); padding: 7px 16px; font-size: 14px;
+    }
+    .pager button:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pager span { font-size: 13px; color: var(--muted); }
+
+    /* 编辑弹窗 */
+    .modal {
+        position: fixed; inset: 0; background: rgba(0,0,0,.45);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 300; padding: 20px;
+    }
+    .modal-card {
+        background: var(--card); border-radius: 14px; padding: 24px;
+        width: 100%; max-width: 520px; max-height: 88vh; overflow: auto;
+        box-shadow: 0 20px 50px rgba(0,0,0,.3);
+        animation: fade .2s ease;
+    }
+    .modal-card h3 { margin-bottom: 16px; font-size: 18px; }
+    .modal-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+    /* 加载骨架 */
+    .skeleton {
+        background: var(--card); border-radius: var(--radius);
+        padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow);
+    }
+    .sk-line {
+        height: 14px; border-radius: 6px; margin-bottom: 10px;
+        background: linear-gradient(90deg, rgba(128,128,128,.13), rgba(128,128,128,.26), rgba(128,128,128,.13));
+        background-size: 200% 100%;
+        animation: sk 1.2s infinite;
+    }
+    @keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    code {
+        background: rgba(0,173,181,.14);
+        color: var(--accent);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-family: ui-monospace, Consolas, monospace;
+    }
+
+    /* ============ 关于 ============ */
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .stat {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 8px;
+        text-align: center;
+        box-shadow: var(--shadow);
+    }
+    .stat b { display: block; font-size: 22px; color: var(--accent); line-height: 1.3; }
+    .stat span { font-size: 13px; color: var(--muted); }
+
+    .section-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 4px 0 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .feature-list { list-style: none; }
+    .feature-list li { position: relative; padding: 5px 0 5px 24px; }
+    .feature-list li::before { content: '✓'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+    footer {
+        text-align: center;
+        padding: 18px;
+        font-size: 13px;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+    }
+
+    /* ============ 移动端 ============ */
+    @media (max-width: 768px) {
+        .hamburger { display: block; }
+        .header-container { gap: 16px; }
+        /* 展开的菜单给实色底，避免透明导航下文字与正文叠在一起 */
+        /* 抽屉对齐右侧按钮组（容器左右内边距 20px） */
+        nav {
+            position: absolute;
+            top: 100%;
+            right: 20px;
+            left: auto;
+            width: auto;
+            min-width: 150px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: none;
+        }
+        nav.open { display: block; }
+        nav ul { flex-direction: column; gap: 0; }
+        nav li { border-bottom: 1px solid var(--border); }
+        nav li:last-child { border-bottom: none; }
+        nav a { display: block; padding: 14px 20px; border-bottom: none; }
+        nav a.active { border-bottom: none; }
+        main { padding: 20px 16px 40px; }
+    }
+
+    /* 超窄屏优先保证按钮空间 */
+    @media (max-width: 480px) {
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; transition: none !important; }
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="header-container">
+        <nav id="navMenu">
+            <ul>
+                <li><a href="#home" data-target="home">首页</a></li>
+                <li><a href="#about" data-target="about">关于</a></li>
+            </ul>
+        </nav>
+        <div class="header-right">
+            <button class="icon-btn" id="themeBtn" title="切换深色/浅色模式" aria-label="切换深色模式">🌙</button>
+            <button class="icon-btn hamburger" id="menuBtn" aria-label="打开菜单" aria-expanded="false">☰</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <!-- 首页 -->
+    <section id="home" class="active">
+        <h1>📖 博客文章</h1>
+        <div class="search-bar">
+            <div class="search-wrap">
+                <!-- 放大镜改画成 SVG：emoji 图标随系统字体渲染，跟输入框文字对不齐 -->
+                <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="10.8" cy="10.8" r="6.3"/>
+                    <path d="M15.4 15.4 20 20"/>
+                </svg>
+                <input type="search" id="searchInput" placeholder="搜索标题或正文…" autocomplete="off">
+            </div>
+            <button class="new-post" id="newPostBtn">✍️ 发布文章</button>
+        </div>
+        <!-- 发布文章表单（默认收起） -->
+        <div class="card" id="publishCard" hidden>
+            <div class="section-title">✍️ 发布新文章</div>
+            <div class="form-item">
+                <label for="newTitle">标题</label>
+                <input type="text" id="newTitle" maxlength="80" placeholder="输入文章标题">
+            </div>
+            <div class="form-item">
+                <label for="newAuthor">作者</label>
+                <input type="text" id="newAuthor" maxlength="20" placeholder="你的昵称（默认：游客）">
+            </div>
+            <div class="form-item">
+                <label for="newContent">正文</label>
+                <textarea id="newContent" maxlength="5000" placeholder="写下你的文章…"></textarea>
+            </div>
+            <div class="form-item">
+                <label for="newTags">标签（可选）</label>
+                <input type="text" id="newTags" maxlength="60" placeholder="逗号分隔，最多 5 个">
+            </div>
+            <div class="publish-foot">
+                <button id="publishBtn">发布</button>
+                <button class="ghost" id="publishCancel">取消</button>
+                <p class="tip" id="publishTip"></p>
+            </div>
+        </div>
+        <div class="toolbar">
+            <div class="sort-group">
+                <button class="active" data-sort="new">最新</button>
+                <button data-sort="hot">最热</button>
+                <button data-sort="likes">最多赞</button>
+            </div>
+            <span class="subtitle" id="countText" style="margin:0;"></span>
+        </div>
+        <div class="tag-bar" id="tagBar"></div>
+        <div id="articleList"></div>
+        <div class="pager" id="pager"></div>
+    </section>
+
+    <!-- 关于 -->
+    <section id="about">
+        <h1>ℹ️ 关于本站</h1>
+
+        <div class="card">
+            <div class="section-title">📌 站点简介</div>
+            <p>这是一个<strong>纯前端</strong>实现的简易个人博客：不需要服务器、不需要数据库，
+                打开即用。</p>
+            <div class="stat-grid" style="margin:16px 0 0;">
+                <div class="stat"><b id="aboutArt">0</b><span>篇文章</span></div>
+                <div class="stat"><b id="aboutCm">0</b><span>条评论</span></div>
+                <div class="stat"><b id="aboutVer">2.0</b><span>当前版本</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">✨ 功能特性</div>
+            <ul class="feature-list">
+                <li>长文自动折叠，展开阅读全文；分页浏览</li>
+                <li>深色 / 浅色主题一键切换，自动记忆你的选择</li>
+                <li>移动端自适应，窄屏自动折叠为汉堡菜单</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="section-title">🛠 技术实现</div>
+            <p style="color:var(--muted);font-size:14px;">
+                整个站点就是一个 HTML 文件：原生 HTML + CSS 变量（主题）+ 原生 JavaScript，UI 采用事件委托渲染，<strong>零依赖、零构建</strong>。<br>
+                没有后端、没有数据库、没有任何网络请求。
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="section-title">🔑 使用说明</div>
+            <p style="font-size:14px;">
+                这是一个<strong>纯静态</strong>博客：直接在浏览器打开即可浏览文章、发表评论、点赞与搜索。<br>
+                无需注册、无需登录，所有内容都保存在本机浏览器中。
+            </p>
+            <p style="margin-top:8px;color:var(--muted);font-size:13px;">
+                ⚠️ 这是纯前端演示版：数据只在你这台设备的这个浏览器里，换设备、换浏览器或清理站点数据都会丢失，请勿用于存放重要内容。
+            </p>
+        </div>
+    </section>
+
+</main>
+
+<footer>© 2026 · 纯静态版（无后端，数据存本机浏览器）</footer>
+<div id="toast" role="status" aria-live="polite"></div>
+
+
+<script>
+(function () {
+    'use strict';
+
+    /* ================= 配置 ================= */
+    const KEY_ART   = 'ghBlog.articles';  // 文章 + 评论
+    const KEY_LIKE  = 'ghBlog.likes';     // 本机点赞记录
+    const KEY_THEME = 'blogTheme';
+    const OLD_ART   = 'blogArticles';     // 旧版键名，首次打开时迁移
+
+    const $  = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const D  = 86400000;
+
+    /* ================= 本地存储（localStorage，纯前端，无后端 / 无数据库 / 无网络请求） ================= */
+    function lsGet(key, def) {
+        try { const v = localStorage.getItem(key); return v === null ? def : JSON.parse(v); }
+        catch (e) { return def; }
+    }
+    function lsSet(key, val) {
+        try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+        catch (e) { return false; }
+    }
+    function getLikes() { return lsGet(KEY_LIKE, []); }
+    function isLiked(id) { return getLikes().indexOf(String(id)) >= 0; }
+    function toggleLike(id) {
+        id = String(id);
+        const arr = getLikes();
+        const i = arr.indexOf(id);
+        if (i >= 0) arr.splice(i, 1); else arr.push(id);
+        lsSet(KEY_LIKE, arr);
+        return i < 0; // 是否变成已赞
+    }
+
+    /* ================= 工具函数 ================= */
+    // XSS 防护：所有用户输入渲染前必须转义
+    function esc(str) {
+        return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[c]);
+    }
+    function fmtTime(t) {
+        const d = new Date(t);
+        if (isNaN(d.getTime())) return String(t || '');
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    function relTime(t) {
+        if (!t) return '';
+        const diff = Date.now() - t;
+        const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+        if (diff < MIN) return '刚刚';
+        if (diff < HOUR) return Math.floor(diff / MIN) + ' 分钟前';
+        if (diff < DAY) return Math.floor(diff / HOUR) + ' 小时前';
+        if (diff < 7 * DAY) return Math.floor(diff / DAY) + ' 天前';
+        return fmtTime(t).slice(0, 10);
+    }
+    function readTime(text) { return Math.max(1, Math.round(String(text || '').length / 400)); }
+    function nameHue(name) {
+        let h = 0; const s = String(name || '?');
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+        return h;
+    }
+    // 小圆头像：昵称首字母 + 个人专属底色（不再使用上传头像）
+    function miniAvatar(name, big) {
+        const nm = String(name || '匿名');
+        const huge = big ? ' lg' : '';
+        return `<span class="mini-avatar${huge}" style="background:hsl(${nameHue(nm)} 58% 46%)" title="${esc(nm)}">${esc(nm.trim().charAt(0).toUpperCase() || '?')}</span>`;
+    }
+    // 搜索关键词高亮（先转义再匹配，避免注入）
+    function hl(text, kw) {
+        const safe = esc(text);
+        if (!kw) return safe;
+        const k = esc(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return safe.replace(new RegExp(k, 'gi'), (m) => `<mark>${m}</mark>`);
+    }
+    let toastTimer;
+    function toast(msg) {
+        const el = $('#toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+    }
+    function normTags(raw) {
+        if (Array.isArray(raw)) raw = raw.join(',');
+        const out = [];
+        for (const t of String(raw || '').split(/[,，、\s]+/)) {
+            const s = t.trim().slice(0, 10);
+            if (s && !out.includes(s)) out.push(s);
+            if (out.length >= 5) break;
+        }
+        return out;
+    }
+
+    /* ================= 数据层 ================= */
+    let articlesCache = [];
+    let allTags = [];
+    const state = { sort: 'new', tag: '', page: 1, pageSize: 8, total: 0, pages: 1 };
+    const openComments = new Set();   // 已展开的评论框
+    const expanded = new Set();       // 已展开阅读全文的文章
+    const viewed = new Set();         // 已计入浏览量的文章（仅记一次）
+
+    function getArticles() { return articlesCache; }
+
+    async function loadArticles() {
+        const all = lsGet(KEY_ART, []);
+        const liked = getLikes();
+        const kw = $('#searchInput').value.trim().toLowerCase();
+        let list = all.slice();
+        if (state.tag) list = list.filter((a) => normTags(a.tags).includes(state.tag));
+        if (kw) list = list.filter((a) =>
+            ((a.title || '') + ' ' + (a.content || '')).toLowerCase().includes(kw));
+        list.sort((x, y) => {
+            if (state.sort === 'hot')   return (y.views - x.views) || (y.created_at - x.created_at);
+            if (state.sort === 'likes') return (y.likes - x.likes) || (y.created_at - x.created_at);
+            return (y.created_at - x.created_at) || (String(y.id) < String(x.id) ? 1 : -1);
+        });
+        state.total = list.length;
+        state.pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+        state.page  = Math.min(Math.max(1, state.page), state.pages);
+        const start = (state.page - 1) * state.pageSize;
+        articlesCache = list.slice(start, start + state.pageSize).map((a) => ({
+            id:        String(a.id),
+            author:    a.author || '匿名',
+            title:     a.title || '',
+            content:   a.content || '',
+            views:     a.views || 0,
+            likes:     a.likes || 0,
+            liked:     liked.indexOf(String(a.id)) >= 0,
+            tags:      normTags(a.tags),
+            time:      a.created_at || Date.now(),
+            comments:  (a.comments || []).map((c) => ({
+                id: String(c.id), name: c.name, msg: c.msg, created_at: c.created_at || Date.now()
+            }))
+        }));
+        return articlesCache;
+    }
+
+    async function loadTags() {
+        const cnt = {};
+        for (const a of lsGet(KEY_ART, [])) for (const t of normTags(a.tags)) cnt[t] = (cnt[t] || 0) + 1;
+        allTags = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])
+            .map((n) => ({ name: n, count: cnt[n] }));
+        renderTags();
+    }
+
+    function renderTags() {
+        const bar = $('#tagBar');
+        if (!allTags.length) { bar.innerHTML = ''; return; }
+        bar.innerHTML =
+            `<button class="tag-chip${state.tag ? '' : ' active'}" data-tag="">全部</button>` +
+            allTags.map((t) => `<button class="tag-chip${state.tag === t.name ? ' active' : ''}"
+                data-tag="${esc(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('');
+    }
+
+    async function reloadAll() {
+        await loadArticles();
+        renderArticles();
+    }
+
+    function renderAboutStats() {
+        const list = lsGet(KEY_ART, []);
+        const cm = list.reduce((n, a) => n + (Array.isArray(a.comments) ? a.comments.length : 0), 0);
+        const ea = $('#aboutArt'); if (ea) ea.textContent = list.length;
+        const ec = $('#aboutCm');  if (ec) ec.textContent = cm;
+    }
+
+    /* ================= 写操作（仅本机 localStorage） ================= */
+    function bumpViews(id) {
+        const list = lsGet(KEY_ART, []);
+        const a = list.find((x) => String(x.id) === id);
+        if (a) { a.views = (a.views || 0) + 1; lsSet(KEY_ART, list); }
+    }
+    async function doLike(id) {
+        const liked = toggleLike(id);
+        const list = lsGet(KEY_ART, []);
+        const a = list.find((x) => String(x.id) === id);
+        if (a) { a.likes = (a.likes || 0) + (liked ? 1 : -1); lsSet(KEY_ART, list); }
+        await reloadAll();
+        toast(liked ? '已点赞 ❤️' : '已取消点赞');
+    }
+    async function addComment(id, name, msg) {
+        const list = lsGet(KEY_ART, []);
+        const a = list.find((x) => String(x.id) === id);
+        if (!a) return;
+        a.comments = a.comments || [];
+        const cid = a.comments.reduce((m, c) => Math.max(m, Number(c.id) || 0), 0) + 1;
+        a.comments.push({ id: cid, name: name || '游客', msg, created_at: Date.now() });
+        lsSet(KEY_ART, list);
+    }
+    // 新增一篇文章，返回新文章 id
+    function addArticle(title, content, tags, author) {
+        const list = lsGet(KEY_ART, []);
+        const id = list.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0) + 1;
+        list.push({
+            id, author: author || '游客',
+            title, content, tags: normTags(tags),
+            views: 0, likes: 0, created_at: Date.now(), comments: []
+        });
+        lsSet(KEY_ART, list);
+        return id;
+    }
+
+    /* ================= 首次数据迁移 / 种子 ================= */
+    function migrateIfNeeded() {
+        const cur = lsGet(KEY_ART, null);
+        if (cur && Array.isArray(cur) && cur.length) return;
+        const old = lsGet(OLD_ART, null);
+        if (old && Array.isArray(old) && old.length) {
+            const fixed = old.map((a) => ({
+                id: a.id, author: a.author || '匿名', title: a.title, content: a.content,
+                tags: a.tags || '', views: a.views || 0, likes: a.likes || 0,
+                created_at: a.created_at || Date.now(),
+                comments: (a.comments || []).map((c) => ({
+                    id: c.id, name: c.name, msg: c.msg, created_at: c.created_at || Date.now()
+                }))
+            }));
+            lsSet(KEY_ART, fixed);
+        }
+    }
+    function defaultSeed() {
+        const now = Date.now();
+        return [
+            {
+                id: 1, author: '站长', views: 168, likes: 24, created_at: now - 2 * D,
+                title: '欢迎来到这个纯静态小博客',
+                tags: ['公告', '随笔'],
+                content: '这是一个完全不需要服务器、不需要数据库的单文件博客：整个站点就是一个 HTML 文件，所有文章和评论都保存在你浏览器的 localStorage 里。\n\n你可以直接打开页面阅读文章、发表评论、点赞，还能用关键词搜索、按标签筛选，或者切换「最新 / 最热 / 最多赞」三种排序方式。\n\n长一点的文章会自动折叠，点击「阅读全文」即可展开。所有内容都在本机，换设备、换浏览器或清理站点数据都会清空，所以它更适合当作一个本地笔记 / 演示来用。',
+                comments: [
+                    { id: 1, name: '路过的喵', msg: '界面好清爽，点赞！', created_at: now - 1 * D },
+                    { id: 2, name: '小白', msg: '请问文章数据存在哪里呀？', created_at: now - 12 * 3600000 }
+                ]
+            },
+            {
+                id: 2, author: '阿强', views: 92, likes: 11, created_at: now - 5 * D,
+                title: '用零依赖的前端也能做出像样的博客',
+                tags: ['技术', '前端'],
+                content: '没有框架、没有构建工具，只有原生 HTML + CSS 变量 + 原生 JavaScript。主题切换靠 data-theme 属性，UI 渲染用事件委托，用户输入统一转义防止 XSS。\n\n这种极简方案特别适合做个人主页、产品落地页或者离线 demo。需要后端能力时再叠加服务端即可，互不干扰。',
+                comments: [
+                    { id: 1, name: 'Dev', msg: '收藏了，受用。', created_at: now - 3 * D }
+                ]
+            },
+            {
+                id: 3, author: '小鹿', views: 56, likes: 7, created_at: now - 9 * D,
+                title: '深色的夜晚，浅色的字',
+                tags: ['随笔', '设计'],
+                content: '深色模式不只是把背景调黑。对比度、阴影、强调色都要重新校准，否则文字会发虚。\n\n这个博客用 CSS 变量统一管理颜色，切换主题时整体联动，连导航栏的毛玻璃都跟着变。',
+                comments: []
+            }
+        ];
+    }
+    function seedIfEmpty() {
+        const cur = lsGet(KEY_ART, null);
+        if (cur && Array.isArray(cur) && cur.length) return;
+        lsSet(KEY_ART, defaultSeed());
+    }
+
+    /* ================= 主题 ================= */
+    function applyTheme(theme) {
+        document.documentElement.dataset.theme = theme;
+        $('#themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+    applyTheme(localStorage.getItem(KEY_THEME) ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    $('#themeBtn').addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        localStorage.setItem(KEY_THEME, next);
+    });
+
+    /* ================= 导航 ================= */
+    const navMenu = $('#navMenu');
+    const menuBtn = $('#menuBtn');
+    const headerEl = document.querySelector('header');
+    function syncHeader() { headerEl.classList.toggle('scrolled', window.scrollY > 8); }
+    window.addEventListener('scroll', syncHeader, { passive: true });
+    window.addEventListener('resize', syncHeader);
+    syncHeader();
+
+    menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = navMenu.classList.toggle('open');
+        menuBtn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => {
+        if (navMenu.classList.contains('open') && !navMenu.contains(e.target)) {
+            navMenu.classList.remove('open');
+            menuBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    function goPage(id) {
+        $$('section').forEach((s) => s.classList.toggle('active', s.id === id));
+        $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.target === id));
+        navMenu.classList.remove('open');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
+    }
+    $$('nav a').forEach((a) => {
+        a.addEventListener('click', (e) => { e.preventDefault(); goPage(a.dataset.target); });
+    });
+    window.addEventListener('hashchange', () => {
+        const id = location.hash.slice(1);
+        if ($('#' + id)) goPage(id);
+    });
+
+    /* ================= 渲染文章 ================= */
+    function renderArticles() {
+        const wrap = $('#articleList');
+        const all = getArticles();
+        const kw = $('#searchInput').value.trim();
+        const list = kw
+            ? all.filter((a) => (a.title + ' ' + a.content).toLowerCase().includes(kw.toLowerCase()))
+            : all;
+
+        $('#countText').textContent = kw
+            ? `本页匹配 ${list.length} 条 · 共 ${state.total} 篇`
+            : `共 ${state.total} 篇文章${state.tag ? `（标签：${state.tag}）` : ''}`;
+
+        if (!list.length) {
+            $('#pager').innerHTML = '';
+            wrap.innerHTML = kw
+                ? `<div class="card empty"><span class="emoji">🔍</span>没有匹配「${esc(kw)}」的文章</div>`
+                : (state.tag
+                    ? `<div class="card empty"><span class="emoji">🏷</span>「${esc(state.tag)}」标签下暂无文章</div>`
+                    : `<div class="card empty"><span class="emoji">📝</span>还没有文章</div>`);
+            return;
+        }
+
+        wrap.innerHTML = list.map((art) => {
+            const comments = Array.isArray(art.comments) ? art.comments : [];
+            const isLong = art.content.length > 200;
+            const clamp = isLong && !expanded.has(art.id);
+
+            const commentHtml = comments.length
+                ? comments.map((c) => `
+                    <div class="comment-item">
+                        <div>
+                            <div><strong>${esc(c.name)}</strong><span class="meta">${esc(relTime(c.created_at))}</span></div>
+                            <div class="msg">${esc(c.msg)}</div>
+                        </div>
+                    </div>`).join('')
+                : `<p style="color:var(--muted);font-size:14px;">暂无评论，快来抢沙发～</p>`;
+
+            return `
+            <article class="card" data-id="${art.id}">
+                <div class="card-head">
+                    <h3>${hl(art.title, kw)}</h3>
+                </div>
+                <div class="art-meta">
+                    <span class="author" title="作者：${esc(art.author)}">
+                        ${miniAvatar(art.author, true)}
+                        <span>${esc(art.author)}</span>
+                    </span>
+                    <span title="${esc(fmtTime(art.time))}">🕒 ${relTime(art.time)}</span>
+                    <span>👁 ${art.views} 浏览</span>
+                    <span>💬 ${comments.length} 评论</span>
+                    <span>📄 约 ${readTime(art.content)} 分钟</span>
+                </div>
+                <div class="content${clamp ? ' clamp' : ''}">${hl(art.content, kw)}</div>
+                ${isLong ? `<button class="read-more" data-id="${art.id}">${expanded.has(art.id) ? '收起 ↑' : '阅读全文 ↓'}</button>` : ''}
+                ${art.tags && art.tags.length
+                    ? `<div class="art-tags">${art.tags
+                        .map((t) => `<span class="t" data-tag="${esc(t)}"># ${esc(t)}</span>`).join('')}</div>`
+                    : ''}
+                <div class="art-actions">
+                    <button class="act-btn like-btn${art.liked ? ' liked' : ''}" data-id="${art.id}">
+                        <span class="ico">${art.liked ? '❤️' : '🤍'}</span><span>赞&nbsp;${art.likes}</span>
+                    </button>
+                    <button class="act-btn comment-toggle-btn" data-id="${art.id}">
+                        <span class="ico">💬</span><span>评论&nbsp;${comments.length}</span>
+                    </button>
+                </div>
+                <div class="comment-block" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+                    <div class="comment-list">${commentHtml}</div>
+                    <div class="comment-input-area${openComments.has(art.id) ? ' open' : ''}" data-id="${art.id}">
+                        <div class="form-item" style="margin-top:12px;">
+                            <input type="text" placeholder="你的昵称（默认：游客）" class="c-name" data-id="${art.id}" maxlength="20">
+                        </div>
+                        <div class="form-item">
+                            <textarea placeholder="写下评论…" class="c-content" data-id="${art.id}" maxlength="500"></textarea>
+                        </div>
+                        <p class="tip c-tip" data-id="${art.id}"></p>
+                        <button class="commentBtn" data-id="${art.id}">提交评论</button>
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
+
+        renderPager();
+    }
+
+    function renderPager() {
+        const p = $('#pager');
+        if (state.pages <= 1) { p.innerHTML = ''; return; }
+        p.innerHTML = `
+            <button data-page="prev" ${state.page <= 1 ? 'disabled' : ''}>上一页</button>
+            <span>第 ${state.page} / ${state.pages} 页</span>
+            <button data-page="next" ${state.page >= state.pages ? 'disabled' : ''}>下一页</button>`;
+    }
+
+    function showSkeleton() {
+        $('#articleList').innerHTML = Array.from({ length: 3 }).map(() => `
+            <div class="skeleton">
+                <div class="sk-line" style="width:45%;height:20px;"></div>
+                <div class="sk-line" style="width:70%;"></div>
+                <div class="sk-line" style="width:90%;"></div>
+                <div class="sk-line" style="width:60%;"></div>
+            </div>`).join('');
+    }
+
+    /* ================= 文章区事件（委托，只绑定一次） ================= */
+    $('#articleList').addEventListener('click', async (e) => {
+        const likeBtn = e.target.closest('.like-btn');
+        if (likeBtn) { await doLike(likeBtn.dataset.id); return; }
+
+        // 展开 / 收起全文（首次展开计一次浏览）
+        const moreBtn = e.target.closest('.read-more');
+        if (moreBtn) {
+            const id = String(moreBtn.dataset.id);
+            if (expanded.has(id)) expanded.delete(id);
+            else { expanded.add(id); if (!viewed.has(id)) { viewed.add(id); bumpViews(id); } }
+            await reloadAll();
+            return;
+        }
+
+        // 点击文章内标签 → 按标签筛选
+        const tagEl = e.target.closest('.art-tags .t');
+        if (tagEl) {
+            state.tag = tagEl.dataset.tag;
+            state.page = 1;
+            showSkeleton();
+            await reloadAll();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
+        // 展开 / 收起评论框
+        const toggle = e.target.closest('.comment-toggle-btn');
+        if (toggle) {
+            const id = String(toggle.dataset.id);
+            const box = document.querySelector(`.comment-input-area[data-id="${id}"]`);
+            if (!box) return;
+            const willOpen = !box.classList.contains('open');
+            box.classList.toggle('open', willOpen);
+            if (willOpen) { openComments.add(id); box.querySelector('.c-name').focus(); }
+            else openComments.delete(id);
+            return;
+        }
+
+        // 提交评论
+        const submit = e.target.closest('.commentBtn');
+        if (submit) {
+            const id = String(submit.dataset.id);
+            const area = submit.closest('.comment-input-area');
+            const nameEl = area.querySelector('.c-name');
+            const msgEl = area.querySelector('.c-content');
+            const tipEl = area.querySelector('.c-tip');
+            const msg = msgEl.value.trim();
+            if (!msg) {
+                tipEl.className = 'tip c-tip';
+                tipEl.textContent = '评论内容不能为空';
+                return;
+            }
+            submit.disabled = true;
+            try {
+                await addComment(id, nameEl.value.trim() || '游客', msg);
+                openComments.add(id);
+                await reloadAll();
+                toast('评论已发布');
+            } catch (err) {
+                tipEl.className = 'tip c-tip';
+                tipEl.textContent = '保存失败';
+            } finally {
+                submit.disabled = false;
+            }
+            return;
+        }
+    });
+
+    // 支持回车展开评论
+    $('#articleList').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.classList.contains('comment-toggle-btn')) e.target.click();
+    });
+
+    /* ================= 顶部工具条 ================= */
+    $('#searchInput').addEventListener('input', renderArticles);
+
+    $$('.sort-group button').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            if (btn.classList.contains('active')) return;
+            $$('.sort-group button').forEach((b) => b.classList.toggle('active', b === btn));
+            state.sort = btn.dataset.sort;
+            state.page = 1;
+            showSkeleton();
+            await reloadAll();
+        });
+    });
+
+    $('#tagBar').addEventListener('click', async (e) => {
+        const chip = e.target.closest('.tag-chip');
+        if (!chip) return;
+        state.tag = chip.dataset.tag || '';
+        state.page = 1;
+        showSkeleton();
+        await reloadAll();
+    });
+
+    $('#pager').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-page]');
+        if (!btn || btn.disabled) return;
+        state.page += (btn.dataset.page === 'next' ? 1 : -1);
+        showSkeleton();
+        await reloadAll();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    /* ================= 发布文章 ================= */
+    const publishCard = $('#publishCard');
+    function openPublish() {
+        publishCard.hidden = false;
+        $('#publishTip').textContent = '';
+        publishCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => $('#newTitle').focus(), 260);
+    }
+    function closePublish() {
+        publishCard.hidden = true;
+        $('#newTitle').value = '';
+        $('#newAuthor').value = '';
+        $('#newContent').value = '';
+        $('#newTags').value = '';
+        $('#publishTip').textContent = '';
+    }
+    $('#newPostBtn').addEventListener('click', () => {
+        if (publishCard.hidden) openPublish(); else closePublish();
+    });
+    $('#publishCancel').addEventListener('click', closePublish);
+    $('#publishCard').addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closePublish();
+        // Ctrl / Cmd + Enter 快捷发布
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#publishBtn').click();
+    });
+    $('#publishBtn').addEventListener('click', async () => {
+        const tip = $('#publishTip');
+        const title = $('#newTitle').value.trim();
+        const content = $('#newContent').value.trim();
+        const author = $('#newAuthor').value.trim() || '游客';
+        const tags = $('#newTags').value.trim();
+
+        tip.className = 'tip';
+        tip.textContent = '';
+        if (!title || !content) {
+            tip.textContent = '标题和正文不能为空';
+            return;
+        }
+        const btn = $('#publishBtn');
+        btn.disabled = true;
+        try {
+            const id = addArticle(title, content, tags, author);
+            closePublish();
+            state.tag = '';
+            state.page = 1;
+            expanded.add(String(id));      // 新文章默认展开，方便直接看到
+            $$('.tag-chip').forEach((c) => c.classList.remove('active'));
+            await loadTags();
+            await reloadAll();
+            renderAboutStats();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            toast('文章已发布 🎉');
+        } catch (err) {
+            tip.className = 'tip';
+            tip.textContent = '保存失败，请检查浏览器是否允许本地存储';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    /* ================= 初始化 ================= */
+    async function init() {
+        migrateIfNeeded();
+        seedIfEmpty();
+        await loadTags();
+        await reloadAll();
+        renderAboutStats();
+        const id = location.hash.slice(1);
+        goPage((id && document.getElementById(id)) ? id : 'home');
+    }
+    init();
+})();
+
+</script>
+</body>
+</html>
